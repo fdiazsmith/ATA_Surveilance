@@ -43,7 +43,7 @@ class CameraStream:
 
 if __name__ == "__main__":
     try:
-        camera = CameraStream('rtsp://admin:anna.landa85@10.0.0.26/Preview_01_main')
+        camera = CameraStream('rtsp://admin:anna.landa85@10.0.0.26/h264Preview_01_sub')
         camera.main()
     except KeyboardInterrupt:
         camera.release()
