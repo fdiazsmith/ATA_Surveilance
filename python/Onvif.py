@@ -47,25 +47,36 @@ for service in client.wsdl.services.values():
 # Interact with the event service using available operations
 # event_service = client.bind('EventService', 'EventPort')
 # event_service = client.bind('EventService', 'EventPortType')
-event_service = client.bind('EventService', 'PullPointSubscription')
+# event_service = client.bind('EventService', 'PullPointSubscription')
 
 # Create PullPointSubscription
-pullpoint = event_service.CreatePullPointSubscription()
-print(f"Subscription Reference: {pullpoint.SubscriptionReference.Address}")
+# pullpoint = event_service.CreatePullPointSubscription()
+# print(f"Subscription Reference: {pullpoint.SubscriptionReference.Address}")
 
 # Pull messages from the subscription
-while True:
-    try:
-        pull_messages = event_service.PullMessages({
-            'SubscriptionReference': pullpoint.SubscriptionReference,
-            'MessageLimit': 10,
-            'Timeout': 'PT10S'
-        })
+# while True:
+#     try:
+#         pull_messages = event_service.PullMessages({
+#             'SubscriptionReference': pullpoint.SubscriptionReference,
+#             'MessageLimit': 10,
+#             'Timeout': 'PT10S'
+#         })
 
-        for msg in pull_messages.NotificationMessage:
-            print(f"Event: {msg}")
+#         for msg in pull_messages.NotificationMessage:
+#             print(f"Event: {msg}")
 
-        time.sleep(10)  # Wait for 10 seconds before pulling the next messages
-    except Exception as e:
-        print(f"Error during pull messages: {e}")
-        break
+#         time.sleep(10)  # Wait for 10 seconds before pulling the next messages
+#     except Exception as e:
+#         print(f"Error during pull messages: {e}")
+#         break
+
+
+
+
+# Bind to the PullPointSubscription port
+pull_point_subscription = client.bind('PullPointSubscription')
+
+# Call the PullMessages operation
+pull_messages = pull_point_subscription.PullMessages({
+    # Your parameters here
+})
