@@ -37,27 +37,6 @@ const camera = new Cam({
             }
 
         });
-        // Create PullPointSubscription
-        // camera.createPullPointSubscription({}, function(err, subscription)  {
-        //     if (err) {
-        //         console.error('Error creating PullPointSubscription:', err);
-        //         return;
-        //     }
-        //     console.log('PullPointSubscription created:', subscription);
-
-        //     // Pull Messages
-        //     setInterval(() => {
-        //         camera.pullMessages({
-        //             timeout: 'PT5S',
-        //             messageLimit: 10
-        //         }, (err, messages) => {
-        //             if (err) {
-        //                 console.error('Error pulling messages:', err);
-        //                 return;
-        //             }
-        //             console.log('Pulled messages:', messages);
-        //         });
-        //     }, 5000); // Poll every 5 seconds
-        // });
+  
     });
 });
