@@ -1,20 +1,17 @@
-# opencv with gstreamer and ffmpeg
-import cv2
-
 import cv2
 
 # Replace with your RTSP URL
-RTSP_URL = "rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_main"
+RTSP_URL = "rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_sub"
 
 def main():
-    # Define the GStreamer pipeline
+    # Define the GStreamer pipeline with frame dropping settings
     gst_pipeline = (
-        f"rtspsrc location={RTSP_URL} latency=0 ! "
+        f"rtspsrc location={RTSP_URL} latency=0 buffer-mode=auto-drop ! "
         "rtph264depay ! "
         "h264parse ! "
         "avdec_h264 ! "
         "videoconvert ! "
-        "appsink"
+        "appsink max-buffers=1 drop=true"
     )
 
     # Open a connection to the RTSP stream
@@ -38,11 +35,11 @@ def main():
             print("Error: Unable to read frame")
             break
 
-        # Manipulate the frame (e.g., convert to grayscale)
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # # Manipulate the frame (e.g., convert to grayscale)
+        # gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # Display the resulting frame
-        cv2.imshow(window_name, gray_frame)
+        cv2.imshow(window_name, frame)
 
         # Press 'q' to quit
         if cv2.waitKey(1) & 0xFF == ord('q'):
