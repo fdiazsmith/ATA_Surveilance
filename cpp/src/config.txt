@@ -1,0 +1,4 @@
+RTSP_URL=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_main
+LOCAL_VIDEO_PATH=../assets/static.mp4
+VIDEO_WIDTH=800
+VIDEO_HEIGHT=600
