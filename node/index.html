@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ONVIF Camera Stream</title>
+</head>
+<body>
+    <h1>ONVIF Camera Stream</h1>
+    <video id="video" controls autoplay></video>
+    <script>
+        const ws = new WebSocket('ws://localhost:8082');
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'stream') {
+                const video = document.getElementById('video');
+                video.src = data.uri;
+                // video.src = src="blob:https://10.0.0.26/408f472a-3949-4f5d-9b06-5f8f20b5480e";
+                console.log('Stream:', data.uri);
+            } else if (data.type === 'event') {
+                console.log('Event:', data.event);
+            } else if (data.type === 'error') {
+                console.error(data.message);
+            }
+        };
+
+        ws.onopen = function() {
+            console.log('WebSocket connection opened');
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket connection closed');
+        };
+    </script>
+</body>
+</html>
