@@ -5,6 +5,7 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 #include <iostream>
+#include <chrono>
 
 const char* vertex_shader_source = R"(
     attribute vec4 position;
@@ -94,6 +95,9 @@ struct AppData {
     GstSample* sample_rtsp;
     GstSample* sample_local;
     float alpha;
+    float target_alpha;
+    std::chrono::time_point<std::chrono::high_resolution_clock> transition_start;
+    bool transitioning;
 };
 
 static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
@@ -159,6 +163,20 @@ void init_gstreamer(AppData* app) {
     gst_element_set_state(app->pipeline_local, GST_STATE_PLAYING);
 }
 
+void update_transition(AppData* app) {
+    if (app->transitioning) {
+        auto now = std::chrono::high_resolution_clock::now();
+        float elapsed = std::chrono::duration<float>(now - app->transition_start).count();
+        if (elapsed >= 1.0f) {
+            app->alpha = app->target_alpha;
+            app->transitioning = false;
+        } else {
+            float t = elapsed / 1.0f;
+            app->alpha = (app->target_alpha == 1.0f) ? t : 1.0f - t;
+        }
+    }
+}
+
 void render(AppData* app) {
     if (app->new_frame_rtsp) {
         GstBuffer* buffer = gst_sample_get_buffer(app->sample_rtsp);
@@ -185,6 +203,8 @@ void render(AppData* app) {
 
         app->new_frame_local = false;
     }
+
+    update_transition(app);
 
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -214,6 +234,8 @@ int main() {
     app.new_frame_rtsp = false;
     app.new_frame_local = false;
     app.alpha = 0.0f;
+    app.target_alpha = 0.0f;
+    app.transitioning = false;
 
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -273,11 +295,15 @@ int main() {
         glfwPollEvents();
         render(&app);
 
-        if (glfwGetKey(app.window, GLFW_KEY_A) == GLFW_PRESS) {
-            app.alpha = 1.0f;
+        if (glfwGetKey(app.window, GLFW_KEY_A) == GLFW_PRESS && !app.transitioning) {
+            app.target_alpha = 1.0f;
+            app.transition_start = std::chrono::high_resolution_clock::now();
+            app.transitioning = true;
         }
-        if (glfwGetKey(app.window, GLFW_KEY_D) == GLFW_PRESS) {
-            app.alpha = 0.0f;
+        if (glfwGetKey(app.window, GLFW_KEY_D) == GLFW_PRESS && !app.transitioning) {
+            app.target_alpha = 0.0f;
+            app.transition_start = std::chrono::high_resolution_clock::now();
+            app.transitioning = true;
         }
     }
 
