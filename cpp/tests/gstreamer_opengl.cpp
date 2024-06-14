@@ -24,8 +24,13 @@ const char* fragment_shader_source = R"(
     uniform sampler2D tex2;
     uniform float alpha;
     void main() {
-        vec4 color1 = texture2D(tex1, v_texcoord);
-        vec4 color2 = texture2D(tex2, v_texcoord);
+        // flip the y-axis
+    //    vec2 uv = vec2( 1.0 - v_texcoord.x, v_texcoord.y);
+    //    rotate 180 degrees
+       vec2 uv = vec2( 0.0 - v_texcoord.x, 1.0 - v_texcoord.y);
+       uv = vec2(1.0 - uv.x, uv.y);
+        vec4 color1 = texture2D(tex1, uv);
+        vec4 color2 = texture2D(tex2, uv);
         gl_FragColor = mix(color1, color2, alpha);
     }
 )";
@@ -139,7 +144,7 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
 void init_gstreamer(AppData* app) {
     gst_init(NULL, NULL);
 
-    app->pipeline_rtsp = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_main ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_rtsp", NULL);
+    app->pipeline_rtsp = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_sub ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_rtsp", NULL);
     app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
 
     app->pipeline_local = gst_parse_launch("filesrc location=../../assets/static.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_local", NULL);
@@ -204,8 +209,8 @@ void render(AppData* app) {
         app->new_frame_local = false;
     }
 
-    update_transition(app);
-
+    // update_transition(app);
+    app->alpha = 0.0f;
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(app->program);
