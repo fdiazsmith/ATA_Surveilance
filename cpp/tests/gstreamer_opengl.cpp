@@ -1,5 +1,4 @@
 // g++ -o gstreamer_opengl gstreamer_opengl.cpp `pkg-config --cflags --libs glew glfw3 gstreamer-1.0 gstreamer-app-1.0` -lGLESv2
-
 #include <GLES2/gl2.h>
 #include <GLFW/glfw3.h>
 #include <gst/gst.h>
@@ -24,13 +23,8 @@ const char* fragment_shader_source = R"(
     uniform sampler2D tex2;
     uniform float alpha;
     void main() {
-        // flip the y-axis
-    //    vec2 uv = vec2( 1.0 - v_texcoord.x, v_texcoord.y);
-    //    rotate 180 degrees
-       vec2 uv = vec2( 0.0 - v_texcoord.x, 1.0 - v_texcoord.y);
-       uv = vec2(1.0 - uv.x, uv.y);
-        vec4 color1 = texture2D(tex1, uv);
-        vec4 color2 = texture2D(tex2, uv);
+        vec4 color1 = texture2D(tex1, v_texcoord);
+        vec4 color2 = texture2D(tex2, v_texcoord);
         gl_FragColor = mix(color1, color2, alpha);
     }
 )";
@@ -101,7 +95,7 @@ struct AppData {
     GstSample* sample_local;
     float alpha;
     float target_alpha;
-    std::chrono::time_point<std::chrono::high_resolution_clock> transition_start;
+    std::chrono::steady_clock::time_point transition_start;
     bool transitioning;
 };
 
@@ -168,20 +162,6 @@ void init_gstreamer(AppData* app) {
     gst_element_set_state(app->pipeline_local, GST_STATE_PLAYING);
 }
 
-void update_transition(AppData* app) {
-    if (app->transitioning) {
-        auto now = std::chrono::high_resolution_clock::now();
-        float elapsed = std::chrono::duration<float>(now - app->transition_start).count();
-        if (elapsed >= 1.0f) {
-            app->alpha = app->target_alpha;
-            app->transitioning = false;
-        } else {
-            float t = elapsed / 1.0f;
-            app->alpha = (app->target_alpha == 1.0f) ? t : 1.0f - t;
-        }
-    }
-}
-
 void render(AppData* app) {
     if (app->new_frame_rtsp) {
         GstBuffer* buffer = gst_sample_get_buffer(app->sample_rtsp);
@@ -209,8 +189,16 @@ void render(AppData* app) {
         app->new_frame_local = false;
     }
 
-    // update_transition(app);
-    app->alpha = 0.0f;
+    if (app->transitioning) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - app->transition_start).count();
+        app->alpha = app->target_alpha == 1.0f ? (elapsed / 1000.0f) : (1.0f - elapsed / 1000.0f);
+        if (elapsed >= 1000) {
+            app->alpha = app->target_alpha;
+            app->transitioning = false;
+        }
+    }
+
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(app->program);
@@ -302,12 +290,12 @@ int main() {
 
         if (glfwGetKey(app.window, GLFW_KEY_A) == GLFW_PRESS && !app.transitioning) {
             app.target_alpha = 1.0f;
-            app.transition_start = std::chrono::high_resolution_clock::now();
+            app.transition_start = std::chrono::steady_clock::now();
             app.transitioning = true;
         }
         if (glfwGetKey(app.window, GLFW_KEY_D) == GLFW_PRESS && !app.transitioning) {
             app.target_alpha = 0.0f;
-            app.transition_start = std::chrono::high_resolution_clock::now();
+            app.transition_start = std::chrono::steady_clock::now();
             app.transitioning = true;
         }
     }
