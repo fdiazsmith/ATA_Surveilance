@@ -1,10 +1,16 @@
-// g++ -o gstreamer_opengl gstreamer_opengl.cpp `pkg-config --cflags --libs glew glfw3 gstreamer-1.0 gstreamer-app-1.0` -lGLESv2
+// g++ -o gstreamer_opengl gstreamer_opengl.cpp `pkg-config --cflags --libs glew glfw3 gstreamer-1.0 gstreamer-app-1.0` -lGLESv2 -lfreetype
+
 #include <GLES2/gl2.h>
 #include <GLFW/glfw3.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 #include <iostream>
 #include <chrono>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <sstream>
+#include <iomanip>
 
 const char* vertex_shader_source = R"(
     attribute vec4 position;
@@ -79,6 +85,13 @@ void update_texture(GLuint texture, const void* data, GLsizei width, GLsizei hei
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+struct FrameBuffer {
+    std::mutex mtx;
+    std::condition_variable cv;
+    GstSample* sample = nullptr;
+    bool new_frame = false;
+};
+
 struct AppData {
     GLFWwindow* window;
     GLuint program;
@@ -89,27 +102,45 @@ struct AppData {
     GstElement* pipeline_local;
     GstElement* appsink_rtsp;
     GstElement* appsink_local;
-    bool new_frame_rtsp;
-    bool new_frame_local;
-    GstSample* sample_rtsp;
-    GstSample* sample_local;
+    FrameBuffer rtsp_buffer;
+    FrameBuffer local_buffer;
     float alpha;
     float target_alpha;
     std::chrono::steady_clock::time_point transition_start;
     bool transitioning;
+    int frame_count;
+    std::chrono::steady_clock::time_point last_time;
 };
 
 static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
     AppData* app = static_cast<AppData*>(data);
-    app->new_frame_rtsp = true;
-    app->sample_rtsp = gst_app_sink_pull_sample(sink);
+    {
+        std::lock_guard<std::mutex> lock(app->rtsp_buffer.mtx);
+        if (app->rtsp_buffer.sample) {
+            gst_sample_unref(app->rtsp_buffer.sample);
+        }
+        app->rtsp_buffer.sample = gst_app_sink_pull_sample(sink);
+        app->rtsp_buffer.new_frame = true;
+    }
+    app->rtsp_buffer.cv.notify_one();
+    auto now = std::chrono::steady_clock::now();
+    std::cout << "New RTSP frame received at " << std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() << std::endl; // Debug
     return GST_FLOW_OK;
 }
 
 static GstFlowReturn new_frame_callback_local(GstAppSink* sink, gpointer data) {
     AppData* app = static_cast<AppData*>(data);
-    app->new_frame_local = true;
-    app->sample_local = gst_app_sink_pull_sample(sink);
+    {
+        std::lock_guard<std::mutex> lock(app->local_buffer.mtx);
+        if (app->local_buffer.sample) {
+            gst_sample_unref(app->local_buffer.sample);
+        }
+        app->local_buffer.sample = gst_app_sink_pull_sample(sink);
+        app->local_buffer.new_frame = true;
+    }
+    app->local_buffer.cv.notify_one();
+    auto now = std::chrono::steady_clock::now();
+    std::cout << "New local frame received at " << std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() << std::endl; // Debug
     return GST_FLOW_OK;
 }
 
@@ -138,7 +169,7 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
 void init_gstreamer(AppData* app) {
     gst_init(NULL, NULL);
 
-    app->pipeline_rtsp = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_sub ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_rtsp", NULL);
+    app->pipeline_rtsp = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_main ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_rtsp", NULL);
     app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
 
     app->pipeline_local = gst_parse_launch("filesrc location=../../assets/static.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_local", NULL);
@@ -163,40 +194,51 @@ void init_gstreamer(AppData* app) {
 }
 
 void render(AppData* app) {
-    if (app->new_frame_rtsp) {
-        GstBuffer* buffer = gst_sample_get_buffer(app->sample_rtsp);
-        GstMapInfo map;
-        gst_buffer_map(buffer, &map, GST_MAP_READ);
+    // Update RTSP texture
+    {
+        std::unique_lock<std::mutex> lock(app->rtsp_buffer.mtx);
+        if (app->rtsp_buffer.new_frame) {
+            GstBuffer* buffer = gst_sample_get_buffer(app->rtsp_buffer.sample);
+            GstMapInfo map;
+            gst_buffer_map(buffer, &map, GST_MAP_READ);
 
-        update_texture(app->tex_rtsp, map.data, 800, 600);
+            update_texture(app->tex_rtsp, map.data, 800, 600);
 
-        gst_buffer_unmap(buffer, &map);
-        gst_sample_unref(app->sample_rtsp);
+            gst_buffer_unmap(buffer, &map);
+            gst_sample_unref(app->rtsp_buffer.sample);
+            app->rtsp_buffer.sample = nullptr;
 
-        app->new_frame_rtsp = false;
+            app->rtsp_buffer.new_frame = false;
+        }
     }
 
-    if (app->new_frame_local) {
-        GstBuffer* buffer = gst_sample_get_buffer(app->sample_local);
-        GstMapInfo map;
-        gst_buffer_map(buffer, &map, GST_MAP_READ);
+    // Update local texture
+    {
+        std::unique_lock<std::mutex> lock(app->local_buffer.mtx);
+        if (app->local_buffer.new_frame) {
+            GstBuffer* buffer = gst_sample_get_buffer(app->local_buffer.sample);
+            GstMapInfo map;
+            gst_buffer_map(buffer, &map, GST_MAP_READ);
 
-        update_texture(app->tex_local, map.data, 800, 600);
+            update_texture(app->tex_local, map.data, 800, 600);
 
-        gst_buffer_unmap(buffer, &map);
-        gst_sample_unref(app->sample_local);
+            gst_buffer_unmap(buffer, &map);
+            gst_sample_unref(app->local_buffer.sample);
+            app->local_buffer.sample = nullptr;
 
-        app->new_frame_local = false;
+            app->local_buffer.new_frame = false;
+        }
     }
 
     if (app->transitioning) {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - app->transition_start).count();
-        app->alpha = app->target_alpha == 1.0f ? (elapsed / 1000.0f) : (1.0f - elapsed / 1000.0f);
-        if (elapsed >= 1000) {
-            app->alpha = app->target_alpha;
+        float progress = static_cast<float>(elapsed) / 1000.0f; // 1 second transition
+        if (progress >= 1.0f) {
+            progress = 1.0f;
             app->transitioning = false;
         }
+        app->alpha = (app->target_alpha == 1.0f) ? progress : 1.0f - progress;
     }
 
     glClear(GL_COLOR_BUFFER_BIT);
@@ -222,13 +264,45 @@ void render(AppData* app) {
     glfwSwapBuffers(app->window);
 }
 
+void draw_fps(AppData* app, double fps) {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(2) << "FPS: " << fps;
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, 800, 0, 600, -1, 1);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glRasterPos2f(10, 10);
+    for (char c : ss.str()) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, c);
+    }
+}
+
+void update(AppData* app) {
+    render(app);
+    std::this_thread::sleep_for(std::chrono::milliseconds(16)); // Approximately 60 FPS
+
+    app->frame_count++;
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - app->last_time).count();
+    if (elapsed >= 1000) {
+        double fps = static_cast<double>(app->frame_count) / (elapsed / 1000.0);
+        draw_fps(app, fps);
+        app->frame_count = 0;
+        app->last_time = now;
+    }
+}
+
 int main() {
     AppData app = {};
-    app.new_frame_rtsp = false;
-    app.new_frame_local = false;
     app.alpha = 0.0f;
     app.target_alpha = 0.0f;
     app.transitioning = false;
+    app.frame_count = 0;
+    app.last_time = std::chrono::steady_clock::now();
 
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -286,7 +360,6 @@ int main() {
 
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
-        render(&app);
 
         if (glfwGetKey(app.window, GLFW_KEY_A) == GLFW_PRESS && !app.transitioning) {
             app.target_alpha = 1.0f;
@@ -298,6 +371,8 @@ int main() {
             app.transition_start = std::chrono::steady_clock::now();
             app.transitioning = true;
         }
+
+        update(&app);
     }
 
     glfwDestroyWindow(app.window);
