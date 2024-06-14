@@ -138,7 +138,7 @@ void init_gstreamer(AppData* app) {
     app->pipeline_rtsp = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_main ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_rtsp", NULL);
     app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
 
-    app->pipeline_local = gst_parse_launch("filesrc location=assets/static.mov ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_local", NULL);
+    app->pipeline_local = gst_parse_launch("filesrc location=../../assets/static.mp4 ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_local", NULL);
     app->appsink_local = gst_bin_get_by_name(GST_BIN(app->pipeline_local), "appsink_local");
 
     GstAppSinkCallbacks callbacks_rtsp = { NULL, NULL, new_frame_callback_rtsp };
