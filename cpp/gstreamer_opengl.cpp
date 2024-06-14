@@ -1,3 +1,5 @@
+// g++ -o gstreamer_opengl gstreamer_opengl.cpp `pkg-config --cflags --libs glew glfw3 gstreamer-1.0 gstreamer-app-1.0` -lGLESv2
+
 #include <GLES2/gl2.h>
 #include <GLFW/glfw3.h>
 #include <gst/gst.h>
@@ -17,9 +19,13 @@ const char* vertex_shader_source = R"(
 const char* fragment_shader_source = R"(
     precision mediump float;
     varying vec2 v_texcoord;
-    uniform sampler2D texture;
+    uniform sampler2D tex1;
+    uniform sampler2D tex2;
+    uniform float alpha;
     void main() {
-        gl_FragColor = texture2D(texture, v_texcoord);
+        vec4 color1 = texture2D(tex1, v_texcoord);
+        vec4 color2 = texture2D(tex2, v_texcoord);
+        gl_FragColor = mix(color1, color2, alpha);
     }
 )";
 
@@ -76,18 +82,31 @@ void update_texture(GLuint texture, const void* data, GLsizei width, GLsizei hei
 struct AppData {
     GLFWwindow* window;
     GLuint program;
-    GLuint texture;
+    GLuint tex_rtsp;
+    GLuint tex_local;
     GLuint vbo, ebo;
-    GstElement* pipeline;
-    GstElement* appsink;
-    bool new_frame;
-    GstSample* sample;
+    GstElement* pipeline_rtsp;
+    GstElement* pipeline_local;
+    GstElement* appsink_rtsp;
+    GstElement* appsink_local;
+    bool new_frame_rtsp;
+    bool new_frame_local;
+    GstSample* sample_rtsp;
+    GstSample* sample_local;
+    float alpha;
 };
 
-static GstFlowReturn new_frame_callback(GstAppSink* sink, gpointer data) {
+static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
     AppData* app = static_cast<AppData*>(data);
-    app->new_frame = true;
-    app->sample = gst_app_sink_pull_sample(sink);
+    app->new_frame_rtsp = true;
+    app->sample_rtsp = gst_app_sink_pull_sample(sink);
+    return GST_FLOW_OK;
+}
+
+static GstFlowReturn new_frame_callback_local(GstAppSink* sink, gpointer data) {
+    AppData* app = static_cast<AppData*>(data);
+    app->new_frame_local = true;
+    app->sample_local = gst_app_sink_pull_sample(sink);
     return GST_FLOW_OK;
 }
 
@@ -116,39 +135,74 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
 void init_gstreamer(AppData* app) {
     gst_init(NULL, NULL);
 
-    app->pipeline = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_sub ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink", NULL);
-    app->appsink = gst_bin_get_by_name(GST_BIN(app->pipeline), "appsink");
+    app->pipeline_rtsp = gst_parse_launch("rtspsrc location=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_main ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_rtsp", NULL);
+    app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
 
-    GstAppSinkCallbacks callbacks = { NULL, NULL, new_frame_callback };
-    gst_app_sink_set_callbacks(GST_APP_SINK(app->appsink), &callbacks, app, NULL);
+    app->pipeline_local = gst_parse_launch("filesrc location=assets/static.mov ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=800,height=600 ! appsink name=appsink_local", NULL);
+    app->appsink_local = gst_bin_get_by_name(GST_BIN(app->pipeline_local), "appsink_local");
 
-    GstBus* bus = gst_pipeline_get_bus(GST_PIPELINE(app->pipeline));
-    gst_bus_add_watch(bus, bus_call, g_main_loop_new(NULL, FALSE));
-    gst_object_unref(bus);
+    GstAppSinkCallbacks callbacks_rtsp = { NULL, NULL, new_frame_callback_rtsp };
+    gst_app_sink_set_callbacks(GST_APP_SINK(app->appsink_rtsp), &callbacks_rtsp, app, NULL);
 
-    gst_element_set_state(app->pipeline, GST_STATE_PLAYING);
+    GstAppSinkCallbacks callbacks_local = { NULL, NULL, new_frame_callback_local };
+    gst_app_sink_set_callbacks(GST_APP_SINK(app->appsink_local), &callbacks_local, app, NULL);
+
+    GstBus* bus_rtsp = gst_pipeline_get_bus(GST_PIPELINE(app->pipeline_rtsp));
+    gst_bus_add_watch(bus_rtsp, bus_call, g_main_loop_new(NULL, FALSE));
+    gst_object_unref(bus_rtsp);
+
+    GstBus* bus_local = gst_pipeline_get_bus(GST_PIPELINE(app->pipeline_local));
+    gst_bus_add_watch(bus_local, bus_call, g_main_loop_new(NULL, FALSE));
+    gst_object_unref(bus_local);
+
+    gst_element_set_state(app->pipeline_rtsp, GST_STATE_PLAYING);
+    gst_element_set_state(app->pipeline_local, GST_STATE_PLAYING);
 }
 
 void render(AppData* app) {
-    if (app->new_frame) {
-        GstBuffer* buffer = gst_sample_get_buffer(app->sample);
+    if (app->new_frame_rtsp) {
+        GstBuffer* buffer = gst_sample_get_buffer(app->sample_rtsp);
         GstMapInfo map;
         gst_buffer_map(buffer, &map, GST_MAP_READ);
 
-        update_texture(app->texture, map.data, 800, 600);
+        update_texture(app->tex_rtsp, map.data, 800, 600);
 
         gst_buffer_unmap(buffer, &map);
-        gst_sample_unref(app->sample);
+        gst_sample_unref(app->sample_rtsp);
 
-        app->new_frame = false;
+        app->new_frame_rtsp = false;
+    }
+
+    if (app->new_frame_local) {
+        GstBuffer* buffer = gst_sample_get_buffer(app->sample_local);
+        GstMapInfo map;
+        gst_buffer_map(buffer, &map, GST_MAP_READ);
+
+        update_texture(app->tex_local, map.data, 800, 600);
+
+        gst_buffer_unmap(buffer, &map);
+        gst_sample_unref(app->sample_local);
+
+        app->new_frame_local = false;
     }
 
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(app->program);
     glBindBuffer(GL_ARRAY_BUFFER, app->vbo);
-    glBindTexture(GL_TEXTURE_2D, app->texture);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, app->tex_rtsp);
+    glUniform1i(glGetUniformLocation(app->program, "tex1"), 0);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, app->tex_local);
+    glUniform1i(glGetUniformLocation(app->program, "tex2"), 1);
+
+    glUniform1f(glGetUniformLocation(app->program, "alpha"), app->alpha);
+
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -157,7 +211,9 @@ void render(AppData* app) {
 
 int main() {
     AppData app = {};
-    app.new_frame = false;
+    app.new_frame_rtsp = false;
+    app.new_frame_local = false;
+    app.alpha = 0.0f;
 
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -179,7 +235,8 @@ int main() {
     glfwSwapInterval(1);
 
     app.program = create_shader_program();
-    app.texture = create_texture(800, 600);
+    app.tex_rtsp = create_texture(800, 600);
+    app.tex_local = create_texture(800, 600);
 
     GLfloat vertices[] = {
         // Positions       // Texture Coords
@@ -215,12 +272,21 @@ int main() {
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
         render(&app);
+
+        if (glfwGetKey(app.window, GLFW_KEY_A) == GLFW_PRESS) {
+            app.alpha = 1.0f;
+        }
+        if (glfwGetKey(app.window, GLFW_KEY_D) == GLFW_PRESS) {
+            app.alpha = 0.0f;
+        }
     }
 
     glfwDestroyWindow(app.window);
     glfwTerminate();
-    gst_element_set_state(app.pipeline, GST_STATE_NULL);
-    gst_object_unref(app.pipeline);
+    gst_element_set_state(app.pipeline_rtsp, GST_STATE_NULL);
+    gst_element_set_state(app.pipeline_local, GST_STATE_NULL);
+    gst_object_unref(app.pipeline_rtsp);
+    gst_object_unref(app.pipeline_local);
 
     return 0;
 }
