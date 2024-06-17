@@ -17,7 +17,7 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
             if (key == "RTSP_URL") {
                 rtsp_url = value;
             } else if (key == "LOCAL_VIDEO_PATH") {
-                // local_video_path = value;
+                // local_video_path = value; // Comment out this line
             } else if (key == "VIDEO_WIDTH") {
                 width = std::stoi(value);
             } else if (key == "VIDEO_HEIGHT") {
@@ -26,6 +26,7 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
         }
     }
 }
+
 int main() {
     std::string rtsp_url;
     std::string local_video_path; // Comment out this line
@@ -95,6 +96,8 @@ int main() {
 
     init_gstreamer(&app, rtsp_url, "", width, height); // Pass an empty string for the local video path
 
+    auto start_time = std::chrono::steady_clock::now(); // Start time for the application
+
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
 
@@ -110,8 +113,9 @@ int main() {
         }
 
         auto now = std::chrono::steady_clock::now();
-        auto time_seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-        set_uniform_float(app.program, "time", static_cast<float>(time_seconds));
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
+        float time_seconds = static_cast<float>(elapsed) / 1000.0f;
+        set_uniform_float(app.program, "time", time_seconds);
 
         update(&app);
     }
