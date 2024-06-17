@@ -1,5 +1,3 @@
-// g++ -o gstreamer_opengl gstreamer_opengl.cpp `pkg-config --cflags --libs glew glfw3 gstreamer-1.0 gstreamer-app-1.0` -lGLESv2 -lfreetype
-
 #include <GLES2/gl2.h>
 #include <GLFW/glfw3.h>
 #include <gst/gst.h>
@@ -9,8 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-#include <sstream>
-#include <iomanip>
+#include <FreeImage.h>
 
 const char* vertex_shader_source = R"(
     attribute vec4 position;
@@ -88,8 +85,9 @@ void update_texture(GLuint texture, const void* data, GLsizei width, GLsizei hei
 struct FrameBuffer {
     std::mutex mtx;
     std::condition_variable cv;
-    GstSample* sample = nullptr;
+    GstSample* sample[2] = {nullptr, nullptr};
     bool new_frame = false;
+    int current = 0;
 };
 
 struct AppData {
@@ -116,15 +114,15 @@ static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
     AppData* app = static_cast<AppData*>(data);
     {
         std::lock_guard<std::mutex> lock(app->rtsp_buffer.mtx);
-        if (app->rtsp_buffer.sample) {
-            gst_sample_unref(app->rtsp_buffer.sample);
+        int next = (app->rtsp_buffer.current + 1) % 2;
+        if (app->rtsp_buffer.sample[next]) {
+            gst_sample_unref(app->rtsp_buffer.sample[next]);
         }
-        app->rtsp_buffer.sample = gst_app_sink_pull_sample(sink);
+        app->rtsp_buffer.sample[next] = gst_app_sink_pull_sample(sink);
         app->rtsp_buffer.new_frame = true;
+        app->rtsp_buffer.current = next;
     }
     app->rtsp_buffer.cv.notify_one();
-    auto now = std::chrono::steady_clock::now();
-    std::cout << "New RTSP frame received at " << std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() << std::endl; // Debug
     return GST_FLOW_OK;
 }
 
@@ -132,15 +130,15 @@ static GstFlowReturn new_frame_callback_local(GstAppSink* sink, gpointer data) {
     AppData* app = static_cast<AppData*>(data);
     {
         std::lock_guard<std::mutex> lock(app->local_buffer.mtx);
-        if (app->local_buffer.sample) {
-            gst_sample_unref(app->local_buffer.sample);
+        int next = (app->local_buffer.current + 1) % 2;
+        if (app->local_buffer.sample[next]) {
+            gst_sample_unref(app->local_buffer.sample[next]);
         }
-        app->local_buffer.sample = gst_app_sink_pull_sample(sink);
+        app->local_buffer.sample[next] = gst_app_sink_pull_sample(sink);
         app->local_buffer.new_frame = true;
+        app->local_buffer.current = next;
     }
     app->local_buffer.cv.notify_one();
-    auto now = std::chrono::steady_clock::now();
-    std::cout << "New local frame received at " << std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() << std::endl; // Debug
     return GST_FLOW_OK;
 }
 
@@ -194,39 +192,42 @@ void init_gstreamer(AppData* app) {
 }
 
 void render(AppData* app) {
-    // Update RTSP texture
+    bool rtsp_frame_updated = false;
+    bool local_frame_updated = false;
+
     {
         std::unique_lock<std::mutex> lock(app->rtsp_buffer.mtx);
         if (app->rtsp_buffer.new_frame) {
-            GstBuffer* buffer = gst_sample_get_buffer(app->rtsp_buffer.sample);
+            GstBuffer* buffer = gst_sample_get_buffer(app->rtsp_buffer.sample[app->rtsp_buffer.current]);
             GstMapInfo map;
             gst_buffer_map(buffer, &map, GST_MAP_READ);
 
             update_texture(app->tex_rtsp, map.data, 800, 600);
 
             gst_buffer_unmap(buffer, &map);
-            gst_sample_unref(app->rtsp_buffer.sample);
-            app->rtsp_buffer.sample = nullptr;
+            gst_sample_unref(app->rtsp_buffer.sample[app->rtsp_buffer.current]);
+            app->rtsp_buffer.sample[app->rtsp_buffer.current] = nullptr;
 
             app->rtsp_buffer.new_frame = false;
+            rtsp_frame_updated = true;
         }
     }
 
-    // Update local texture
     {
         std::unique_lock<std::mutex> lock(app->local_buffer.mtx);
         if (app->local_buffer.new_frame) {
-            GstBuffer* buffer = gst_sample_get_buffer(app->local_buffer.sample);
+            GstBuffer* buffer = gst_sample_get_buffer(app->local_buffer.sample[app->local_buffer.current]);
             GstMapInfo map;
             gst_buffer_map(buffer, &map, GST_MAP_READ);
 
             update_texture(app->tex_local, map.data, 800, 600);
 
             gst_buffer_unmap(buffer, &map);
-            gst_sample_unref(app->local_buffer.sample);
-            app->local_buffer.sample = nullptr;
+            gst_sample_unref(app->local_buffer.sample[app->local_buffer.current]);
+            app->local_buffer.sample[app->local_buffer.current] = nullptr;
 
             app->local_buffer.new_frame = false;
+            local_frame_updated = true;
         }
     }
 
@@ -262,23 +263,8 @@ void render(AppData* app) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glfwSwapBuffers(app->window);
-}
 
-void draw_fps(AppData* app, double fps) {
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(2) << "FPS: " << fps;
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, 800, 0, 600, -1, 1);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glRasterPos2f(10, 10);
-    for (char c : ss.str()) {
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, c);
-    }
+    std::cout << "Render completed: RTSP frame updated = " << rtsp_frame_updated << ", Local frame updated = " << local_frame_updated << std::endl;
 }
 
 void update(AppData* app) {
@@ -290,7 +276,7 @@ void update(AppData* app) {
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - app->last_time).count();
     if (elapsed >= 1000) {
         double fps = static_cast<double>(app->frame_count) / (elapsed / 1000.0);
-        draw_fps(app, fps);
+        std::cout << "FPS: " << fps << std::endl;
         app->frame_count = 0;
         app->last_time = now;
     }
@@ -347,6 +333,7 @@ int main() {
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
 
     GLint posAttrib = glGetAttribLocation(app.program, "position");
     glEnableVertexAttribArray(posAttrib);

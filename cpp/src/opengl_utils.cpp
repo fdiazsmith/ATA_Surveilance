@@ -62,3 +62,9 @@ void update_texture(GLuint texture, const void* data, GLsizei width, GLsizei hei
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
+
+void set_uniform_float(GLuint program, const std::string& name, float value) {
+    GLint location = glGetUniformLocation(program, name.c_str());
+    glUseProgram(program);
+    glUniform1f(location, value);
+}

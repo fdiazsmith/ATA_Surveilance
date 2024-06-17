@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <chrono>
 
 void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height) {
     std::ifstream config_file("src/config.txt");
@@ -16,7 +17,7 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
             if (key == "RTSP_URL") {
                 rtsp_url = value;
             } else if (key == "LOCAL_VIDEO_PATH") {
-                local_video_path = value;
+                // local_video_path = value;
             } else if (key == "VIDEO_WIDTH") {
                 width = std::stoi(value);
             } else if (key == "VIDEO_HEIGHT") {
@@ -25,10 +26,9 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
         }
     }
 }
-
 int main() {
     std::string rtsp_url;
-    std::string local_video_path;
+    std::string local_video_path; // Comment out this line
     int width = 800;
     int height = 600;
 
@@ -62,7 +62,7 @@ int main() {
 
     app.program = create_shader_program("shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
     app.tex_rtsp = create_texture(width, height);
-    app.tex_local = create_texture(width, height);
+    // app.tex_local = create_texture(width, height); // Comment out this line
 
     GLfloat vertices[] = {
         // Positions       // Texture Coords
@@ -93,7 +93,7 @@ int main() {
     glEnableVertexAttribArray(texAttrib);
     glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
 
-    init_gstreamer(&app, rtsp_url, local_video_path, width, height);
+    init_gstreamer(&app, rtsp_url, "", width, height); // Pass an empty string for the local video path
 
     while (!glfwWindowShouldClose(app.window)) {
         glfwPollEvents();
@@ -109,15 +109,19 @@ int main() {
             app.transitioning = true;
         }
 
+        auto now = std::chrono::steady_clock::now();
+        auto time_seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        set_uniform_float(app.program, "time", static_cast<float>(time_seconds));
+
         update(&app);
     }
 
     glfwDestroyWindow(app.window);
     glfwTerminate();
     gst_element_set_state(app.pipeline_rtsp, GST_STATE_NULL);
-    gst_element_set_state(app.pipeline_local, GST_STATE_NULL);
+    // gst_element_set_state(app.pipeline_local, GST_STATE_NULL); // Comment out this line
     gst_object_unref(app.pipeline_rtsp);
-    gst_object_unref(app.pipeline_local);
+    // gst_object_unref(app.pipeline_local); // Comment out this line
 
     return 0;
 }
