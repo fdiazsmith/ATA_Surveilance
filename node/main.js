@@ -2,6 +2,7 @@ const onvif = require('onvif');
 const { Cam } = onvif;
 const http = require('http');
 const socketIo = require('socket.io');
+const robot = require('robotjs');  // Import robotjs
 
 // Camera details
 const cameraIp = '10.0.0.26';
@@ -35,14 +36,18 @@ const camera = new Cam({
         
         camera.on('event', function (result) {
             console.log('Event:', result, '\n');
-            m = result.message.message;
+            let m = result.message.message;
 
             // Emit the message to all connected clients
             io.emit('cameraEvent', m);
+            
+            // Emulate a keyboard event, press 'd' key
+            robot.keyTap('d');
 
-            // for (let key in m) {
-            //     console.log(key, m[key]);
-            // }
+            // Wait 5 seconds and emit another keyboard event, press 'a' key
+            setTimeout(() => {
+                robot.keyTap('a');
+            }, 5000);
         });
     });
 });
