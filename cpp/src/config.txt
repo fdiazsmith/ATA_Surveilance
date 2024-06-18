@@ -2,4 +2,4 @@ RTSP_URL=rtsp://admin:anna.landa85@10.0.0.26:554/Preview_01_sub
 LOCAL_VIDEO_PATH=../assets/static.mp4
 VIDEO_WIDTH=1200
 VIDEO_HEIGHT=720
-FULLSCREEN=false
+FULLSCREEN=true

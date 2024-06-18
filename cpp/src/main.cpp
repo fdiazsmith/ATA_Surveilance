@@ -66,6 +66,7 @@ int main() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 
     app.window = glfwCreateWindow(width, height, "OpenGL ES GStreamer Test", monitor, NULL); // Full-screen mode
+    
     if (!app.window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();

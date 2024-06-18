@@ -56,7 +56,7 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
 
 void init_gstreamer(AppData* app, const std::string& rtsp_url, const std::string& local_video_path, int width, int height) {
     gst_init(NULL, NULL);
-
+    
     std::string rtsp_pipeline = "rtspsrc location=" + rtsp_url + " ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_rtsp";
     app->pipeline_rtsp = gst_parse_launch(rtsp_pipeline.c_str(), NULL);
     app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
