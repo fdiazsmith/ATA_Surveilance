@@ -52,6 +52,30 @@ obj/
 # Ignore all files in the wsdl directory
 **/wsdl/**   
 **/f/**
+
+# ignore all videoa and image formats
+**/*.mp4
+**/*.jpg
+**/*.jpeg
+**/*.png
+**/*.gif
+**/*.webp
+**/*.svg
+**/*.ico
+**/*.webm
+**/*.flv
+**/*.mov
+**/*.avi
+**/*.wmv
+**/*.mpg
+**/*.mpeg
+**/*.mkv
+**/*.m4v
+**/*.m4a
+**/*.mp3
+**/*.wav
+
+
 # NODE
 # Logs
 logs
