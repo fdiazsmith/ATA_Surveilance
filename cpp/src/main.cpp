@@ -7,7 +7,7 @@
 #include <string>
 #include <chrono>
 
-void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height) {
+void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height, bool& fullscreen) {
     std::ifstream config_file("src/config.txt");
     std::string line;
     while (std::getline(config_file, line)) {
@@ -22,18 +22,22 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
                 width = std::stoi(value);
             } else if (key == "VIDEO_HEIGHT") {
                 height = std::stoi(value);
+            } else if (key == "FULLSCREEN") {
+                fullscreen = (value == "true" || value == "1");
             }
         }
     }
 }
+
 
 int main() {
     std::string rtsp_url;
     std::string local_video_path; // Comment out this line
     int width = 800;
     int height = 600;
+    bool fullscreen = false;
 
-    load_config(rtsp_url, local_video_path, width, height);
+    load_config(rtsp_url, local_video_path, width, height, fullscreen);
 
     AppData app = {};
     app.alpha = 0.0f;
@@ -41,17 +45,27 @@ int main() {
     app.transitioning = false;
     app.frame_count = 0;
     app.last_time = std::chrono::steady_clock::now();
+    app.texture_width = width;  // Initialize texture dimensions
+    app.texture_height = height; // Initialize texture dimensions
 
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return -1;
     }
 
+    GLFWmonitor* monitor = fullscreen ? glfwGetPrimaryMonitor() : NULL;
+    const GLFWvidmode* mode = fullscreen ? glfwGetVideoMode(monitor) : NULL;
+
+    if (fullscreen && mode) {
+        width = mode->width;
+        height = mode->height;
+    }
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 
-    app.window = glfwCreateWindow(width, height, "OpenGL ES GStreamer Test", NULL, NULL);
+    app.window = glfwCreateWindow(width, height, "OpenGL ES GStreamer Test", monitor, NULL); // Full-screen mode
     if (!app.window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -62,8 +76,8 @@ int main() {
     glfwSwapInterval(1);
 
     app.program = create_shader_program("shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
-    app.tex_rtsp = create_texture(width, height);
-    // app.tex_local = create_texture(width, height); // Comment out this line
+    app.tex_rtsp = create_texture(app.texture_width, app.texture_height);
+    // app.tex_local = create_texture(app.texture_width, app.texture_height); // Comment out this line
 
     GLfloat vertices[] = {
         // Positions       // Texture Coords
@@ -94,7 +108,7 @@ int main() {
     glEnableVertexAttribArray(texAttrib);
     glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
 
-    init_gstreamer(&app, rtsp_url, "", width, height); // Pass an empty string for the local video path
+    init_gstreamer(&app, rtsp_url, "", app.texture_width, app.texture_height); // Pass texture dimensions
 
     auto start_time = std::chrono::steady_clock::now(); // Start time for the application
 
@@ -110,6 +124,11 @@ int main() {
             app.target_alpha = 0.0f;
             app.transition_start = std::chrono::steady_clock::now();
             app.transitioning = true;
+        }
+
+        // Check if 'q' key is pressed and set the window to close
+        if (glfwGetKey(app.window, GLFW_KEY_Q) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(app.window, GLFW_TRUE);
         }
 
         auto now = std::chrono::steady_clock::now();

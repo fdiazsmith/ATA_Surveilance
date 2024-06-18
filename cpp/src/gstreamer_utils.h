@@ -36,6 +36,8 @@ struct AppData {
     int frame_count;
     std::chrono::steady_clock::time_point transition_start;
     std::chrono::steady_clock::time_point last_time;
+    int texture_width;  
+    int texture_height; 
 };
 
 void init_gstreamer(AppData* app, const std::string& rtsp_url, const std::string& local_video_path, int width, int height);

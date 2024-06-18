@@ -92,7 +92,7 @@ void render(AppData* app) {
             GstMapInfo map;
             gst_buffer_map(buffer, &map, GST_MAP_READ);
 
-            update_texture(app->tex_rtsp, map.data, 800, 600);
+            update_texture(app->tex_rtsp, map.data, app->texture_width, app->texture_height);
 
             gst_buffer_unmap(buffer, &map);
             gst_sample_unref(app->rtsp_buffer.sample);
@@ -120,7 +120,7 @@ void render(AppData* app) {
     //     }
     // }
 
-    if (app->transitioning) {
+     if (app->transitioning) {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - app->transition_start).count();
         float progress = static_cast<float>(elapsed) / 1000.0f; // 1 second transition
