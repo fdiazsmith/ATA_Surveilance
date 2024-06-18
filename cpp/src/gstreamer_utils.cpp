@@ -54,34 +54,32 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
     return TRUE;
 }
 
-void init_gstreamer(AppData* app, const std::string& rtsp_url, const std::string& local_video_path, int width, int height) {
+void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height) {
     gst_init(NULL, NULL);
-    
-    std::string rtsp_pipeline = "rtspsrc location=" + rtsp_url + " ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_rtsp";
+
+    // Construct the pipeline string with the variables
+    std::string rtsp_pipeline = "rtspsrc location=" + rtsp_url + " latency=0 ! "
+                                "rtph264depay ! "
+                                "h264parse ! "
+                                "avdec_h264 ! "
+                                "videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_rtsp";
+
     app->pipeline_rtsp = gst_parse_launch(rtsp_pipeline.c_str(), NULL);
     app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
 
-    // std::string local_pipeline = "filesrc location=" + local_video_path + " ! decodebin ! videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_local"; // Comment out this line
-    // app->pipeline_local = gst_parse_launch(local_pipeline.c_str(), NULL); // Comment out this line
-    // app->appsink_local = gst_bin_get_by_name(GST_BIN(app->pipeline_local), "appsink_local"); // Comment out this line
+    // Disable buffering on appsink
+    g_object_set(G_OBJECT(app->appsink_rtsp), "drop", TRUE, "sync", FALSE, NULL);
 
     GstAppSinkCallbacks callbacks_rtsp = { NULL, NULL, new_frame_callback_rtsp };
     gst_app_sink_set_callbacks(GST_APP_SINK(app->appsink_rtsp), &callbacks_rtsp, app, NULL);
-
-    // GstAppSinkCallbacks callbacks_local = { NULL, NULL, new_frame_callback_local }; // Comment out this line
-    // gst_app_sink_set_callbacks(GST_APP_SINK(app->appsink_local), &callbacks_local, app, NULL); // Comment out this line
 
     GstBus* bus_rtsp = gst_pipeline_get_bus(GST_PIPELINE(app->pipeline_rtsp));
     gst_bus_add_watch(bus_rtsp, bus_call, g_main_loop_new(NULL, FALSE));
     gst_object_unref(bus_rtsp);
 
-    // GstBus* bus_local = gst_pipeline_get_bus(GST_PIPELINE(app->pipeline_local)); // Comment out this line
-    // gst_bus_add_watch(bus_local, bus_call, g_main_loop_new(NULL, FALSE)); // Comment out this line
-    // gst_object_unref(bus_local); // Comment out this line
-
     gst_element_set_state(app->pipeline_rtsp, GST_STATE_PLAYING);
-    // gst_element_set_state(app->pipeline_local, GST_STATE_PLAYING); // Comment out this line
 }
+
 
 
 void render(AppData* app) {

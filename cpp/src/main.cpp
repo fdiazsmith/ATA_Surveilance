@@ -109,7 +109,7 @@ int main() {
     glEnableVertexAttribArray(texAttrib);
     glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
 
-    init_gstreamer(&app, rtsp_url, "", app.texture_width, app.texture_height); // Pass texture dimensions
+    init_gstreamer(&app, rtsp_url, width, height);
 
     auto start_time = std::chrono::steady_clock::now(); // Start time for the application
 
