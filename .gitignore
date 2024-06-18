@@ -1,3 +1,54 @@
+**/*.mov
+**/*.mp4
+**/*.avi
+**/*.wmv
+**/*.flv
+**/*.mkv
+**/*.webm
+**/*.vob
+**/*.ogv
+# C++ Specific
+
+# Object files
+*.o
+*.obj
+
+# Static and dynamic libraries
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# Executable files
+*.exe
+*.out
+*.app
+
+# Build folders
+build/
+bin/
+obj/
+
+# Backup files
+*~
+*.swp
+
+# IDE specific files
+*.suo
+*.user
+*.userprefs
+*.sdf
+*.sln.docstates
+*.workspace
+*.idea/
+*.project
+*.cproject
+*.settings/
+.vscode/
+
+
+
 # Ignore all files in the wsdl directory
 **/wsdl/**   
 **/f/**
