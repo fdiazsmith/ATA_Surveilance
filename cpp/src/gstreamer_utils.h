@@ -40,7 +40,7 @@ struct AppData {
     int texture_height; 
 };
 
-void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height);
+void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height, bool delay_video, int video_delay);
 
 void render(AppData* app);
 void update(AppData* app);

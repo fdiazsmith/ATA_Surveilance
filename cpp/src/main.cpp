@@ -7,7 +7,7 @@
 #include <string>
 #include <chrono>
 
-void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height, bool& fullscreen) {
+void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height, bool& fullscreen, bool& delay_video, int& video_delay) {
     std::ifstream config_file("src/config.txt");
     std::string line;
     while (std::getline(config_file, line)) {
@@ -24,9 +24,22 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
                 height = std::stoi(value);
             } else if (key == "FULLSCREEN") {
                 fullscreen = (value == "true" || value == "1");
+            } else if (key == "DELAY_VIDEO") {
+                delay_video = (value == "true" || value == "1");
+            } else if (key == "VIDEO_DELAY") {
+                video_delay = std::stoi(value);
             }
         }
     }
+    // print out our config variables to the console
+    std::cout << "RTSP_URL: " << rtsp_url << std::endl;
+    std::cout << "LOCAL_VIDEO_PATH: " << local_video_path << std::endl;
+    std::cout << "VIDEO_WIDTH: " << width << std::endl;
+    std::cout << "VIDEO_HEIGHT: " << height << std::endl;
+    std::cout << "FULLSCREEN: " << fullscreen << std::endl;
+    std::cout << "DELAY_VIDEO: " << delay_video << std::endl;
+    std::cout << "VIDEO_DELAY: " << video_delay << std::endl;
+    
 }
 
 
@@ -36,8 +49,10 @@ int main() {
     int width = 800;
     int height = 600;
     bool fullscreen = false;
+    bool delay_video = false;
+    int video_delay = 0;
 
-    load_config(rtsp_url, local_video_path, width, height, fullscreen);
+    load_config(rtsp_url, local_video_path, width, height, fullscreen, delay_video, video_delay);
 
     AppData app = {};
     app.alpha = 0.0f;
@@ -109,7 +124,7 @@ int main() {
     glEnableVertexAttribArray(texAttrib);
     glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
 
-    init_gstreamer(&app, rtsp_url, width, height);
+    init_gstreamer(&app, rtsp_url, width, height, delay_video, video_delay);
 
     auto start_time = std::chrono::steady_clock::now(); // Start time for the application
 

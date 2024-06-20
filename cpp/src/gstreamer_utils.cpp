@@ -9,7 +9,7 @@ static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
     {
         std::lock_guard<std::mutex> lock(app->rtsp_buffer.mtx);
         if (app->rtsp_buffer.sample) {
-            gst_sample_unref(app->rtsp_buffer.sample);
+            // gst_sample_unref(app->rtsp_buffer.sample);
         }
         app->rtsp_buffer.sample = gst_app_sink_pull_sample(sink);
         app->rtsp_buffer.new_frame = true;
@@ -54,21 +54,38 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
     return TRUE;
 }
 
-void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height) {
+void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height, bool delay_video, int video_delay) {
     gst_init(NULL, NULL);
 
-    // Construct the pipeline string with the variables
+   
     std::string rtsp_pipeline = "rtspsrc location=" + rtsp_url + " latency=0 ! "
                                 "rtph264depay ! "
                                 "h264parse ! "
-                                "avdec_h264 ! "
-                                "videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_rtsp";
+                                "avdec_h264 ! ";
+    
+    if (delay_video) {
+        // Calculate max-size-time based on video_delay (in nanoseconds)
+        int64_t max_size_time = static_cast<int64_t>(video_delay) * 1000000000;
+        rtsp_pipeline += "! queue max-size-time=" + std::to_string(max_size_time) + " ! videorate ! video/x-raw,framerate=25/1 ";
+    }
 
+    rtsp_pipeline += "videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_rtsp sync=false";
+    // rtsp_pipeline += "videoconvert ! videoscale ! video/x-raw,format=RGB,width=" + std::to_string(width) + ",height=" + std::to_string(height) + " ! appsink name=appsink_rtsp";
+ 
+
+    // print the rpsdpipeline
+    printf("RTSP pipeline: %s\n", rtsp_pipeline.c_str());
     app->pipeline_rtsp = gst_parse_launch(rtsp_pipeline.c_str(), NULL);
     app->appsink_rtsp = gst_bin_get_by_name(GST_BIN(app->pipeline_rtsp), "appsink_rtsp");
 
     // Disable buffering on appsink
-    g_object_set(G_OBJECT(app->appsink_rtsp), "drop", TRUE, "sync", FALSE, NULL);
+    if (delay_video) {
+        // g_object_set(G_OBJECT(app->appsink_rtsp), "enable-last-sample", FALSE, NULL);
+        printf("Disabling last sample\n");
+    }else{
+         g_object_set(G_OBJECT(app->appsink_rtsp), "drop", TRUE, "sync", FALSE, NULL);
+    }
+    
 
     GstAppSinkCallbacks callbacks_rtsp = { NULL, NULL, new_frame_callback_rtsp };
     gst_app_sink_set_callbacks(GST_APP_SINK(app->appsink_rtsp), &callbacks_rtsp, app, NULL);
