@@ -6,7 +6,7 @@
 #include <opencv2/opencv.hpp>
 
 
-// CircularBuffer frameBuffer(600); // Assuming 10 seconds delay at 30 fps
+CircularBuffer frameBuffer(600); // Assuming 10 seconds delay at 30 fps
 
 
 static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
@@ -103,7 +103,7 @@ void load_texture_from_buffer(AppData* app, size_t delay_frames) {
         return;
     }
 
-    std::cout << "Buffer retrieved and mapped, size: " << map.size << std::endl;
+    // std::cout << "Buffer retrieved and mapped, size: " << map.size << std::endl;
 
     // Process the buffer to load the texture
     cv::Mat img(cv::Size(app->texture_width, app->texture_height), CV_8UC3, (char*)map.data, cv::Mat::AUTO_STEP);

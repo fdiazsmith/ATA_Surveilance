@@ -41,8 +41,10 @@ struct AppData {
     std::chrono::steady_clock::time_point last_time;
     int texture_width;  
     int texture_height; 
+    AppData(size_t buffer_size)
+        : circularBuffer(buffer_size) {}
     CircularBuffer circularBuffer;
-    AppData() : circularBuffer(20) {} // Initialize with desired buffer size
+    
 };
 
 void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height, bool delay_video, int video_delay);

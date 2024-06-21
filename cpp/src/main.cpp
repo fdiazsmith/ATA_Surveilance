@@ -58,7 +58,7 @@ int main() {
 
     load_config(rtsp_url, width, height, fullscreen, delay_video, video_delay);
 
-    AppData app = {};
+    AppData app(video_delay * 20);
     app.alpha = 0.0f;
     app.target_alpha = 0.0f;
     app.transitioning = false;
@@ -66,7 +66,7 @@ int main() {
     app.last_time = std::chrono::steady_clock::now();
     app.texture_width = width;  // Initialize texture dimensions
     app.texture_height = height; // Initialize texture dimensions
-    
+    // app.circularBuffer = CircularBuffer(video_delay*30); // Initialize with 600 frames (assuming 10 seconds delay at 30 fps)
   
 
     if (!glfwInit()) {
