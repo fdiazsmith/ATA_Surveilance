@@ -1,5 +1,6 @@
 #include "opengl_utils.h"
 #include "gstreamer_utils.h"
+#include "circular_buffer.h"
 #include <GLFW/glfw3.h>
 #include <opencv2/opencv.hpp>
 
@@ -9,7 +10,7 @@
 #include <string>
 #include <chrono>
 
-void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height, bool& fullscreen, bool& delay_video, int& video_delay) {
+void load_config(std::string& rtsp_url,  int& width, int& height, bool& fullscreen, bool& delay_video, int& video_delay) {
     std::ifstream config_file("src/config.txt");
     std::string line;
     while (std::getline(config_file, line)) {
@@ -35,7 +36,6 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
     }
     // print out our config variables to the console
     std::cout << "RTSP_URL: " << rtsp_url << std::endl;
-    std::cout << "LOCAL_VIDEO_PATH: " << local_video_path << std::endl;
     std::cout << "VIDEO_WIDTH: " << width << std::endl;
     std::cout << "VIDEO_HEIGHT: " << height << std::endl;
     std::cout << "FULLSCREEN: " << fullscreen << std::endl;
@@ -49,14 +49,14 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
 
 int main() {
     std::string rtsp_url;
-    std::string local_video_path; // Comment out this line
+    // std::string local_video_path; // Comment out this line
     int width = 800;
     int height = 600;
     bool fullscreen = false;
     bool delay_video = false;
     int video_delay = 0;
 
-    load_config(rtsp_url, local_video_path, width, height, fullscreen, delay_video, video_delay);
+    load_config(rtsp_url, width, height, fullscreen, delay_video, video_delay);
 
     AppData app = {};
     app.alpha = 0.0f;
@@ -66,6 +66,8 @@ int main() {
     app.last_time = std::chrono::steady_clock::now();
     app.texture_width = width;  // Initialize texture dimensions
     app.texture_height = height; // Initialize texture dimensions
+    
+  
 
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
