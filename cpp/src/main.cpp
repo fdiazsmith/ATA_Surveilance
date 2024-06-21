@@ -1,6 +1,8 @@
 #include "opengl_utils.h"
 #include "gstreamer_utils.h"
 #include <GLFW/glfw3.h>
+#include <opencv2/opencv.hpp>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -41,6 +43,8 @@ void load_config(std::string& rtsp_url, std::string& local_video_path, int& widt
     std::cout << "VIDEO_DELAY: " << video_delay << std::endl;
     
 }
+
+
 
 
 int main() {

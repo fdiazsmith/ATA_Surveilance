@@ -10,6 +10,8 @@
 #include <chrono>
 #include <GLFW/glfw3.h>
 #include <GLES2/gl2.h>
+#include <opencv2/opencv.hpp>
+
 
 struct FrameBuffer {
     GstSample* sample;
@@ -41,6 +43,9 @@ struct AppData {
 };
 
 void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int height, bool delay_video, int video_delay);
+
+void load_texture_from_buffer(AppData* app, size_t delay_frames);
+void load_texture_from_mat(const cv::Mat& img);
 
 void render(AppData* app);
 void update(AppData* app);

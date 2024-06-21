@@ -3,34 +3,28 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <opencv2/opencv.hpp>
+#include "circular_buffer.h"
 
-static GstFlowReturn new_frame_callback_rtsp(GstAppSink* sink, gpointer data) {
-    AppData* app = static_cast<AppData*>(data);
-    {
-        std::lock_guard<std::mutex> lock(app->rtsp_buffer.mtx);
-        if (app->rtsp_buffer.sample) {
-            // gst_sample_unref(app->rtsp_buffer.sample);
-        }
-        app->rtsp_buffer.sample = gst_app_sink_pull_sample(sink);
-        app->rtsp_buffer.new_frame = true;
+CircularBuffer frameBuffer(300); // Assuming 10 seconds delay at 30 fps
+
+
+static GstFlowReturn new_frame_callback_rtsp(GstAppSink* appsink, gpointer user_data) {
+    AppData* app = (AppData*)user_data;
+    GstSample* sample = gst_app_sink_pull_sample(appsink);
+    if (!sample) {
+        return GST_FLOW_ERROR;
     }
-    app->rtsp_buffer.cv.notify_one();
+
+    GstBuffer* buffer = gst_sample_get_buffer(sample);
+    if (buffer) {
+        frameBuffer.addFrame(buffer);
+    }
+
+    gst_sample_unref(sample);
     return GST_FLOW_OK;
 }
 
-static GstFlowReturn new_frame_callback_local(GstAppSink* sink, gpointer data) {
-    AppData* app = static_cast<AppData*>(data);
-    {
-        std::lock_guard<std::mutex> lock(app->local_buffer.mtx);
-        if (app->local_buffer.sample) {
-            gst_sample_unref(app->local_buffer.sample);
-        }
-        app->local_buffer.sample = gst_app_sink_pull_sample(sink);
-        app->local_buffer.new_frame = true;
-    }
-    app->local_buffer.cv.notify_one();
-    return GST_FLOW_OK;
-}
 
 static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer data) {
     GMainLoop* loop = static_cast<GMainLoop*>(data);
@@ -97,7 +91,46 @@ void init_gstreamer(AppData* app, const std::string& rtsp_url, int width, int he
     gst_element_set_state(app->pipeline_rtsp, GST_STATE_PLAYING);
 }
 
+void load_texture_from_buffer(AppData* app, size_t delay_frames) {
+    GstBuffer* buffer = frameBuffer.getFrame(delay_frames);
+    if (buffer) {
+        GstMapInfo map;
+        if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+            // Convert GstBuffer to an OpenCV Mat
+            cv::Mat img(cv::Size(app->texture_width, app->texture_height), CV_8UC3, (char*)map.data, cv::Mat::AUTO_STEP);
 
+            // Process the image if needed
+            // Example: Convert to another format, apply filters, etc.
+
+            // Load the Mat as a texture
+            load_texture_from_mat(img);
+
+            gst_buffer_unmap(buffer, &map);
+        }
+        gst_buffer_unref(buffer);
+    }
+}
+
+void load_texture_from_mat(const cv::Mat& img) {
+    // Generate texture ID
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+
+    // Bind the texture
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Load the image data into the texture
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.cols, img.rows, 0, GL_BGR, GL_UNSIGNED_BYTE, img.data);
+
+    // Unbind the texture
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
 
 void render(AppData* app) {
     {
