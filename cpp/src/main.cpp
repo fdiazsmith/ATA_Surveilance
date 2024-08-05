@@ -8,7 +8,7 @@
 #include <chrono>
 
 void load_config(std::string& rtsp_url, std::string& local_video_path, int& width, int& height, bool& fullscreen, bool& delay_video, int& video_delay) {
-    std::ifstream config_file("src/config.txt");
+    std::ifstream config_file("/home/pi/Documents/ATA_Surveilance/config.txt");
     std::string line;
     while (std::getline(config_file, line)) {
         std::istringstream iss(line);
