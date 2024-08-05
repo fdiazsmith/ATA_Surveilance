@@ -3,6 +3,10 @@
 # Load configuration
 source config.txt
 
+echo "Starting video player..."
+delay 15
+
+
 # Example commands using the configuration variables
 echo "RTSP URL: $RTSP_URL"
 echo "Video Width: $VIDEO_WIDTH"

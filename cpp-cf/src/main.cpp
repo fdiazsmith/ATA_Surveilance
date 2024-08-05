@@ -10,6 +10,12 @@
 #include <string>
 #include <chrono>
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+    // Additional adjustments can be added here, like re-creating textures or buffers
+}
+
+
 void load_config(std::string& rtsp_url,  int& width, int& height, bool& fullscreen, bool& delay_video, int& video_delay) {
     std::ifstream config_file("/home/pi/Documents/ATA_Surveilance/config.txt");
     std::string line;
@@ -96,6 +102,9 @@ int main() {
 
     glfwMakeContextCurrent(app.window);
     glfwSwapInterval(1);
+
+          // Register the framebuffer size callback
+    glfwSetFramebufferSizeCallback(app.window, framebuffer_size_callback);
 
     app.program = create_shader_program("shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
     app.tex_rtsp = create_texture(app.texture_width, app.texture_height);
