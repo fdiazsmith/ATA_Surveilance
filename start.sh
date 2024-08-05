@@ -3,8 +3,8 @@
 # Load configuration
 source config.txt
 
-echo "Starting video player..."
-delay 15
+echo "Starting video player...in two minutes"
+delay 120
 
 
 # Example commands using the configuration variables
